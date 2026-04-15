@@ -1,0 +1,69 @@
+name: DMLKT Fiyat Takip
+
+on:
+  schedule:
+    # Her 5 dakikada bir, borsa saatlerinde (09:30-18:10 TR = 06:30-15:10 UTC)
+    # Pazartesi-Cuma, UTC saat 6-15 arası
+    - cron: '*/5 6-15 * * 1-5'
+
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Çalışma modu'
+        required: true
+        default: 'check'
+        type: choice
+        options:
+          - check
+          - summary
+          - test
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── State geri yükle (önceki çalışmadan) ──
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: state.json
+          key: dmlkt-state-
+          restore-keys: |
+            dmlkt-state-
+
+      # ── Çalışma modunu belirle ──
+      - name: Determine mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ inputs.mode }}" >> $GITHUB_OUTPUT
+          else
+            # Otomatik mod: script kendi içinde market saatlerini kontrol eder
+            echo "mode=check" >> $GITHUB_OUTPUT
+          fi
+
+      # ── Ana script ──
+      - name: Run DMLKT Tracker
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python dmlkt_tracker.py ${{ steps.mode.outputs.mode }}
+
+      # ── State kaydet (sonraki çalışma için) ──
+      - name: Save state
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: state.json
+          key: dmlkt-state-${{ github.run_id }}
