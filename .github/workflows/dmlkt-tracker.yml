@@ -18,6 +18,9 @@ on:
           - summary
           - test
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   track:
     runs-on: ubuntu-latest
@@ -38,7 +41,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: state.json
-          key: dmlkt-state-
+          key: dmlkt-state-dummy
           restore-keys: |
             dmlkt-state-
 
@@ -49,7 +52,6 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ inputs.mode }}" >> $GITHUB_OUTPUT
           else
-            # Otomatik mod: script kendi içinde market saatlerini kontrol eder
             echo "mode=check" >> $GITHUB_OUTPUT
           fi
 
@@ -59,6 +61,13 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python dmlkt_tracker.py ${{ steps.mode.outputs.mode }}
+
+      # ── State dosyası yoksa boş oluştur ──
+      - name: Ensure state file exists
+        run: |
+          if [ ! -f state.json ]; then
+            echo '{}' > state.json
+          fi
 
       # ── State kaydet (sonraki çalışma için) ──
       - name: Save state
